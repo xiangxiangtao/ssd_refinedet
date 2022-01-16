@@ -29,7 +29,7 @@ class RefineDet(nn.Module):
         super(RefineDet, self).__init__()
         self.phase = phase
         self.num_classes = num_classes
-        self.cfg = (coco_refinedet, voc_refinedet)[num_classes == 7]
+        self.cfg = (coco_refinedet, voc_refinedet)[num_classes == 2]
         self.priorbox = PriorBox(self.cfg[str(size)])
         with torch.no_grad():
             self.priors = self.priorbox.forward()
@@ -275,7 +275,7 @@ tcb = {
 }
 
 
-def build_refinedet(phase, size=320, num_classes=7):
+def build_refinedet(phase, size=320, num_classes=2):
     if phase != "test" and phase != "train":
         print("ERROR: Phase: " + phase + " not recognized")
         return
@@ -283,6 +283,7 @@ def build_refinedet(phase, size=320, num_classes=7):
         print("ERROR: You specified size " + repr(size) + ". However, " +
               "currently only RefineDet320 and RefineDet512 is supported!")
         return
+    # print(num_classes)
     base_ = vgg(base[str(size)], 3)
     extras_ = add_extras(extras[str(size)], size, 1024)
     ARM_ = arm_multibox(base_, extras_, mbox[str(size)])

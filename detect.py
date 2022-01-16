@@ -26,6 +26,27 @@ import matplotlib.patches as patches
 from matplotlib.ticker import NullLocator
 from data import VOCDetection, VOC_ROOT, VOCAnnotationTransform, BaseTransform
 from data import VOC_CLASSES as labels
+import os
+import warnings
+warnings.filterwarnings("ignore")
+
+threshold=0.41########################################
+dataset_name=os.path.basename(VOC_ROOT)
+print("dataset_name=",dataset_name)
+dataset_split="test"
+if dataset_name in ['real_annotated_gmy']:
+    dataset_split='val'
+print("dataset_split=",dataset_split)
+# weight_path="weights/ssd_gas_composite_2_epoch18.pth"############################
+weight_path="weights/ssd_real_annotated_1_epoch36.pth"############################
+weight_name=os.path.basename(weight_path)
+train_dataset_name=weight_name[weight_name.index("ssd_")+4:weight_name.index(".pth")]
+print("weight_path=",weight_path)
+detection_folder=os.path.join("detection_ssd","{}".format(dataset_name),"{}".format(dataset_split),"train_on_{}".format(train_dataset_name),"threshold{}".format(threshold))
+os.makedirs(detection_folder, exist_ok=True)
+# save_folder=os.path.join("detection_output","{}".format(dataset_name),"{}".format(dataset_split))
+# os.makedirs(save_folder, exist_ok=True)
+
 
 class ImageFolder(Dataset):
     def __init__(self, folder_path, img_size=300):
@@ -54,17 +75,17 @@ class ImageFolder(Dataset):
         return len(self.files)
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='weights/ssd300_701.pth',type=str, help='Trained state_dict file path to open')
-parser.add_argument('--save_folder', default='output/', type=str,help='Dir to save results')
-parser.add_argument('--dataset_root', default='data/samples', help='Dataset root directory path')
+parser.add_argument('--trained_model', default=weight_path,type=str, help='Trained state_dict file path to open')
+# parser.add_argument('--save_folder', default=save_folder, type=str,help='Dir to save results')
+parser.add_argument('--dataset_root', default=os.path.join(VOC_ROOT,dataset_split,"image"), help='Dataset root directory path')
 parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
 parser.add_argument("--n_cpu", type=int, default=0, help="number of cpu threads to use during batch generation")
 parser.add_argument("--img_size", type=int, default=300, help="size of each image dimension")
 args = parser.parse_args()
 
 
-os.makedirs("ssd_output", exist_ok=True)
-net = build_ssd('test', 300, 7)    # initialize SSD
+
+net = build_ssd('test', 300, 2)    # initialize SSD
 net.load_weights(args.trained_model)  #ssd300_701.pth是经过数据增强的
 net = net.cuda()
 
@@ -75,8 +96,18 @@ dataloader = DataLoader(
         num_workers=args.n_cpu,
     )
 TIME=0
-
+print("img_nums=",len(dataloader))
 for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
+    # print("-"*50)
+    # if batch_i>1:
+    #   break;
+
+    # if batch_i<3720:
+    #   continue;
+
+    print("batch=",batch_i)
+    # print("img_paths=",img_paths)
+
     # Configure input
     # input_imgs = Variable(input_imgs.type(Tensor))
 
@@ -95,7 +126,7 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
         TIME += inference_time
 
 
-    print("\t+ Batch %d, Inference Time: %s" % (batch_i, inference_time))
+    # print("\t+ Batch %d, Inference Time: %s" % (batch_i, inference_time))
 
 
     top_k = 10
@@ -103,24 +134,36 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
     # plt.figure(figsize=(10, 10))
     # colors = plt.cm.hsv(np.linspace(0, 1, 21)).tolist()
     cmap = plt.get_cmap("tab20b")
-    colors = [cmap(i) for i in np.linspace(0, 1, 7)]
+    # colors = [cmap(i) for i in np.linspace(0, 1, 7)]
+    colors = [(0,0,0),(1,1,0)]
+    # colors = [255,255]
     # plt.imshow(img)  # plot the image for matplotlib
     # currentAxis = plt.gca()
 
-    img = Image.open(img_paths[0])
-    img = img.resize((300, 300))
-    img = np.array(img)
-    # print(img.shape)
+    img1 = Image.open(img_paths[0]).convert('L')
+    
+    img1 = img1.resize((300, 300))
+    img1 = np.array(img1)
+    # print("img1_shape=",img1.shape)
+    # print(img1)
+    img=np.zeros((img1.shape[0],img1.shape[1],3))
+    for i in range(3):
+       img[:,:,i]=img1
+    img=img.astype('uint8')
+    # print("img_shape=", img.shape)
+    # print(img)
     plt.figure()
     fig, ax = plt.subplots(1)
     ax.imshow(img)
 
+
     detections = y.data
     # scale each detection back up to the image
     scale = torch.Tensor(img.shape[1::-1]).repeat(2)
+    # print(detections.size(1))
     for i in range(detections.size(1)):
         j = 0
-        while detections[0, i, j, 0] >= 0.5:
+        while detections[0, i, j, 0] >= threshold:
             score = detections[0, i, j, 0]
             label_name = labels[i - 1]
             # print(score,label_name)
@@ -135,26 +178,29 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
             # currentAxis.text(pt[0], pt[1], display_txt, bbox={'facecolor': color, 'alpha': 0.5})
             # j += 1
             # Create a Rectangle patch
-            bbox = patches.Rectangle(*coords, linewidth=2, edgecolor=color, facecolor="none")
+            bbox = patches.Rectangle(*coords, linewidth=3, edgecolor=color, facecolor="none")
             # Add the bbox to the plot
             ax.add_patch(bbox)
             # Add label
             plt.text(
                 pt[0],
                 pt[1],
-                s=label_name,
-                color="white",
+                s=label_name+" {:.2f}".format(score),
+                color="red",
                 verticalalignment="top",
                 bbox={"color": color, "pad": 0},
             )
             j+=1
             # Save generated image with detections
     plt.axis("off")
+
     plt.gca().xaxis.set_major_locator(NullLocator())
     plt.gca().yaxis.set_major_locator(NullLocator())
     filename = img_paths[0].split("/")[-1].split(".")[0]
-    plt.savefig(f"ssd_output/{filename}.jpg", bbox_inches="tight",pad_inches=0.0)
+    # print("filename=",filename)
+    plt.savefig(f"{detection_folder}/{filename}.png", bbox_inches="tight",pad_inches=0.0)
     plt.close()
-print("FPS: %s" % (1/(TIME/5)))
+print(TIME)
+print("FPS: %s" % (len(dataloader)/(TIME)))
 
 

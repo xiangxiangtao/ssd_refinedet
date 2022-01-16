@@ -54,9 +54,9 @@ class ImageFolder(Dataset):
         return len(self.files)
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='weights/RefineDet320_591.pth',type=str, help='Trained state_dict file path to open')
+parser.add_argument('--trained_model', default='weights/RefineDet320_62.pth',type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='output/', type=str,help='Dir to save results')
-parser.add_argument('--dataset_root', default='data/samples', help='Dataset root directory path')
+parser.add_argument('--dataset_root', default='data/IR/valid/image', help='Dataset root directory path')
 parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
 parser.add_argument("--n_cpu", type=int, default=0, help="number of cpu threads to use during batch generation")
 parser.add_argument("--img_size", type=int, default=320, help="size of each image dimension")
@@ -64,7 +64,7 @@ args = parser.parse_args()
 
 
 os.makedirs("refinedet_output", exist_ok=True)
-net = build_refinedet('test', 320, 7)
+net = build_refinedet('test', 320, 2)
 net.load_weights(args.trained_model)
 net = net.cuda()
 
@@ -101,7 +101,8 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
     # plt.figure(figsize=(10, 10))
     # colors = plt.cm.hsv(np.linspace(0, 1, 21)).tolist()
     cmap = plt.get_cmap("tab20b")
-    colors = [cmap(i) for i in np.linspace(0, 1, 7)]
+    # colors = [cmap(i) for i in np.linspace(0, 1, 7)]
+    colors = [(0, 0, 0), (1, 1, 0)]
     # plt.imshow(img)  # plot the image for matplotlib
     # currentAxis = plt.gca()
 
@@ -134,7 +135,7 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
             # currentAxis.text(pt[0], pt[1], display_txt, bbox={'facecolor': color, 'alpha': 0.5})
             # j += 1
             # Create a Rectangle patch
-            bbox = patches.Rectangle(*coords, linewidth=2, edgecolor=color, facecolor="none")
+            bbox = patches.Rectangle(*coords, linewidth=3, edgecolor=color, facecolor="none")
             # Add the bbox to the plot
             ax.add_patch(bbox)
             # Add label

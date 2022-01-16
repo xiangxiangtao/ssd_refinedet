@@ -22,6 +22,9 @@ import argparse
 import numpy as np
 import pickle
 import cv2
+import warnings
+warnings.filterwarnings('ignore')
+
 
 if sys.version_info[0] == 2:
     import xml.etree.cElementTree as ET
@@ -33,21 +36,26 @@ def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
 
-parser = argparse.ArgumentParser(
-    description='Single Shot MultiBox Detector Evaluation')
-# parser.add_argument('--trained_model', default='weights/ssd300_701.pth', type=str, help='Trained state_dict file path to open')
-parser.add_argument('--trained_model', default='checkpoints/ssd300_751.pth', type=str, help='Trained state_dict file path to open')
-parser.add_argument('--save_folder', default='eval/', type=str, help='File path to save results')
-parser.add_argument('--confidence_threshold', default=0.01, type=float,help='Detection confidence threshold')
+SSD_ROOT=r"/home/ecust/txx/project/ssd_txx"
+
+parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Evaluation')
+# parser.add_argument('--trained_model', default='weights/ssd300_7.pth', type=str, help='Trained state_dict file path to open')
+# parser.add_argument('--trained_model', default='checkpoints/ssd300_15.pth', type=str, help='Trained state_dict file path to open')
+parser.add_argument('--eval_folder', default=os.path.join(SSD_ROOT,"eval"), type=str, help='File path to save results')
+parser.add_argument('--confidence_threshold', default=0.001, type=float,help='Detection confidence threshold')
 parser.add_argument('--top_k', default=5, type=int,help='Further restrict the number of predictions to parse')
 parser.add_argument('--cuda', default=True, type=str2bool,help='Use cuda to train model')
 parser.add_argument('--voc_root', default=VOC_ROOT, help='Location of VOC root directory')
 parser.add_argument('--cleanup', default=True, type=str2bool,help='Cleanup and remove results files following eval')
-
 args = parser.parse_args()
 
-if not os.path.exists(args.save_folder):
-    os.mkdir(args.save_folder)
+devkit_path = os.path.join("%s","%s", "%s", "result")# %dataset_name
+
+img_ext="jpg"
+
+
+if not os.path.exists(args.eval_folder):
+    os.mkdir(args.eval_folder)
 
 if torch.cuda.is_available():
     if args.cuda:
@@ -59,14 +67,13 @@ if torch.cuda.is_available():
 else:
     torch.set_default_tensor_type('torch.FloatTensor')
 
-annopath = os.path.join(args.voc_root, 'valid', 'label', '%s.xml')
-imgpath = os.path.join(args.voc_root, 'valid', 'image', '%s.jpg')
-imgsetpath = os.path.join(args.voc_root, 'valid', 'image')
-YEAR = '2007'
-# devkit_path = args.voc_root + 'VOC' + YEAR
-devkit_path = '/home/ecust/gmy/ssd.pytorch-master/ssd.pytorch-master/result'
-dataset_mean = (104, 117, 123)
-set_type = 'test'
+
+
+
+
+
+
+
 
 
 class Timer(object):
@@ -114,32 +121,33 @@ def parse_rec(filename):
     return objects
 
 
-def get_output_dir(name, phase):
+def get_output_dir(eval_save_folder,current_dataset_name, name, phase):
     """Return the directory where experimental artifacts are placed.
     If the directory does not exist, it is created.
     A canonical path is built using the name from an imdb and a network
     (if not None).
     """
-    filedir = os.path.join(name, phase)
+    filedir = os.path.join(eval_save_folder, current_dataset_name, name, phase)
     if not os.path.exists(filedir):
         os.makedirs(filedir)
     return filedir
 
 
-def get_voc_results_file_template(image_set, cls):
-    # VOCdevkit/VOC2007/results/det_test_aeroplane.txt
-    filename = 'det_' + image_set + '_%s.txt' % (cls)
-    filedir = os.path.join(devkit_path, 'results')
+def get_voc_results_file_template(eval_save_folder,current_dataset_name, set_type, cls):#获取txt（如detection_val_gas.txt）文件路径
+    filename = 'detection_' + '_%s.txt' % (cls)
+    filedir = os.path.join(devkit_path % (eval_save_folder,current_dataset_name,set_type), 'results')
+    print("*"*10)
+    print(filedir)
     if not os.path.exists(filedir):
         os.makedirs(filedir)
     path = os.path.join(filedir, filename)
     return path
 
 
-def write_voc_results_file(all_boxes, dataset):
+def write_voc_results_file(eval_save_folder,current_dataset_name, all_boxes, dataset, set_type):
     for cls_ind, cls in enumerate(labelmap):
-        print('Writing {:s} VOC results file'.format(cls))
-        filename = get_voc_results_file_template(set_type, cls)
+        # print('Writing {:s} VOC results file'.format(cls))
+        filename = get_voc_results_file_template(eval_save_folder,current_dataset_name, set_type, cls)
         with open(filename, 'wt') as f:
             for im_ind, index in enumerate(dataset.ids):
                 dets = all_boxes[cls_ind+1][im_ind]
@@ -153,39 +161,50 @@ def write_voc_results_file(all_boxes, dataset):
                                    dets[k, 2] + 1, dets[k, 3] + 1))
 
 
-def do_python_eval(output_dir='output', use_07=False):
-    cachedir = os.path.join(devkit_path, 'annotations_cache')
+def do_python_eval(eval_save_folder,current_dataset_name, output_dir, use_07, set_type):
+    # path
+    annopath = os.path.join(args.voc_root, '{}'.format(set_type), 'label', '%s.xml')
+    imgpath = os.path.join(args.voc_root, '{}'.format(set_type), 'image', '%s.{}'.format(img_ext))
+    imgsetpath = os.path.join(args.voc_root, '{}'.format(set_type), 'image')
+
+    cachedir = os.path.join(devkit_path % (eval_save_folder,current_dataset_name,set_type), 'annotations_cache')
+    if not os.path.exists(cachedir):
+        os.makedirs(cachedir)
+
     aps = []
+
     # The PASCAL VOC metric changed in 2010
     use_07_metric = use_07
-    print('VOC07 metric? ' + ('Yes' if use_07_metric else 'No'))
+    # print('VOC07 metric? ' + ('Yes' if use_07_metric else 'No'))
+
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
-    for i, cls in enumerate(labelmap):
-        filename = get_voc_results_file_template(set_type, cls)
-        rec, prec, ap = voc_eval(
-           filename, annopath, imgsetpath.format(set_type), cls, cachedir,
-           ovthresh=0.5, use_07_metric=use_07_metric)
+
+    for i, cls in enumerate(labelmap):#index,gas
+        det_txt_path = get_voc_results_file_template(eval_save_folder,current_dataset_name, set_type, cls)
+
+        rec, prec, ap = voc_eval(set_type,detpath=det_txt_path, annopath=annopath, imagesetfile=imgsetpath, classname=cls, cachedir=cachedir,ovthresh=0.5, use_07_metric=use_07_metric)
         aps += [ap]
         print('AP for {} = {:.4f}'.format(cls, ap))
         with open(os.path.join(output_dir, cls + '_pr.pkl'), 'wb') as f:
             pickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
-    print('Mean AP = {:.4f}'.format(np.mean(aps)))
-    print('~~~~~~~~')
-    print('Results:')
-    for ap in aps:
-        print('{:.3f}'.format(ap))
+    # print('Mean AP = {:.4f}'.format(np.mean(aps)))
+    # print('~~~~~~~~')
+    # print('Results:')
+    # for ap in aps:
+    #     print('{:.3f}'.format(ap))
+    print("-"*50)
     print('MAP={:.4f}'.format(np.mean(aps)))
-    print('~~~~~~~~')
-    print('')
-    print('--------------------------------------------------------------')
-    print('Results computed with the **unofficial** Python eval code.')
-    print('Results should be very close to the official MATLAB eval code.')
-    print('--------------------------------------------------------------')
+    # print('~~~~~~~~')
+    # print('')
+    # print('--------------------------------------------------------------')
+    # print('Results computed with the **unofficial** Python eval code.')
+    # print('Results should be very close to the official MATLAB eval code.')
+    # print('--------------------------------------------------------------')
     return np.mean(aps)
 
 
-def voc_ap(rec, prec, use_07_metric=True):
+def voc_ap(rec, prec, use_07_metric):
     """ ap = voc_ap(rec, prec, [use_07_metric])
     Compute VOC AP given precision and recall.
     If use_07_metric is true, uses the
@@ -219,36 +238,29 @@ def voc_ap(rec, prec, use_07_metric=True):
     return ap
 
 
-def voc_eval(detpath,
-             annopath,
-             imagesetfile,
-             classname,
-             cachedir,
-             ovthresh=0.5,
-             use_07_metric=True):
-    """rec, prec, ap = voc_eval(detpath,
-                           annopath,
-                           imagesetfile,
-                           classname,
-                           [ovthresh],
-                           [use_07_metric])
-Top level function that does the PASCAL VOC evaluation.
-detpath: Path to detections
-   detpath.format(classname) should produce the detection results file.
-annopath: Path to annotations
-   annopath.format(imagename) should be the xml annotations file.
-imagesetfile: Text file containing the list of images, one image per line.
-classname: Category name (duh)
-cachedir: Directory for caching the annotations
-[ovthresh]: Overlap threshold (default = 0.5)
-[use_07_metric]: Whether to use VOC07's 11 point AP computation
-   (default True)
-"""
+def voc_eval(set_type, detpath, annopath, imagesetfile, classname, cachedir, ovthresh=0.5, use_07_metric=True):
+    """rec, prec, ap = voc_eval(detpath, annopath, imagesetfile, classname, [ovthresh], [use_07_metric])
+    Top level function that does the PASCAL VOC evaluation.
+    detpath: Path to detections
+      detpath.format(classname) should produce the detection results file.
+    annopath: Path to annotations
+      annopath.format(imagename) should be the xml annotations file.
+    imagesetfile: Text file containing the list of images, one image per line.
+    classname: Category name (duh)
+    cachedir: Directory for caching the annotations
+    [ovthresh]: Overlap threshold (default = 0.5)
+    [use_07_metric]: Whether to use VOC07's 11 point AP computation
+      (default True)
+    """
 # assumes detections are in detpath.format(classname)
 # assumes annotations are in annopath.format(imagename)
 # assumes imagesetfile is a text file with each line an image name
 # cachedir caches the annotations in a pickle file
 # first load gt
+
+    print(annopath)
+    print(imagesetfile)
+
     if not os.path.isdir(cachedir):
         os.mkdir(cachedir)
     cachefile = os.path.join(cachedir, 'annots.pkl')
@@ -257,15 +269,16 @@ cachedir: Directory for caching the annotations
     #     lines = f.readlines()
     a = sorted(glob.glob("%s/*.*" % imagesetfile))
     imagenames = [path.split('/')[-1].split('.')[0].strip() for path in a]
+
     # imagenames = [x.strip() for x in lines]
     if not os.path.isfile(cachefile):
         # load annots
         recs = {}
         for i, imagename in enumerate(imagenames):
             recs[imagename] = parse_rec(annopath % (imagename))
-            if i % 100 == 0:
-                print('Reading annotation for {:d}/{:d}'.format(
-                   i + 1, len(imagenames)))
+            # if i % 100 == 0:
+            #     print('Reading annotation for {:d}/{:d}'.format(
+            #        i + 1, len(imagenames)))
         # save
         print('Saving cached annotations to {:s}'.format(cachefile))
         with open(cachefile, 'wb') as f:
@@ -357,23 +370,25 @@ cachedir: Directory for caching the annotations
     return rec, prec, ap
 
 
-def eval_net(save_folder, net, cuda, dataset, transform, top_k,
-             im_size=300, thresh=0.05):
+def eval_net(eval_save_folder,current_dataset_name, net, cuda, dataset, transform, top_k, im_size, set_type, thresh=0.05):
+    """对测试img进行推断并保存测试后的结果
+    首先是先将测试数据集送入net进行推断出来detections，存入det_file为pickle文件，
+    这是为了再次评测的时候，如果网络没变的话就直接从pickle中取出上次推断的结果进行评测就好了。
+    """
     num_images = len(dataset)
+    # print(num_images)
     # all detections are collected into:
     #    all_boxes[cls][image] = N x 5 array of detections in
     #    (x1, y1, x2, y2, score)
     all_boxes = [[[] for _ in range(num_images)]
                  for _ in range(len(labelmap)+1)]
-
     # timers
     _t = {'im_detect': Timer(), 'misc': Timer()}
-    output_dir = get_output_dir('ssd300_120000', set_type)
+    output_dir = get_output_dir(eval_save_folder,current_dataset_name, set_type, 'ssd300_120000')############################
     det_file = os.path.join(output_dir, 'detections.pkl')
 
     for i in range(num_images):
         im, gt, h, w = dataset.pull_item(i)
-
         x = Variable(im.unsqueeze(0))
         if args.cuda:
             x = x.cuda()
@@ -394,59 +409,86 @@ def eval_net(save_folder, net, cuda, dataset, transform, top_k,
             boxes[:, 1] *= h
             boxes[:, 3] *= h
             scores = dets[:, 0].cpu().numpy()
-            cls_dets = np.hstack((boxes.cpu().numpy(),
-                                  scores[:, np.newaxis])).astype(np.float32,
-                                                                 copy=False)
+            cls_dets = np.hstack((boxes.cpu().numpy(), scores[:, np.newaxis])).astype(np.float32, copy=False)
             all_boxes[j][i] = cls_dets
-
-        print('im_detect: {:d}/{:d} {:.3f}s'.format(i + 1,
-                                                    num_images, detect_time))
-
+        # if i%100 == 0:
+        #   print('current_im_detect: {:d}/{:d} {:.3f}s'.format(i + 1, num_images, detect_time))
     with open(det_file, 'wb') as f:
         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
-
     print('\n---------Evaluating detections----------\n')
-    MAP=evaluate_detections(all_boxes, output_dir, dataset)
+    MAP=evaluate_detections(eval_save_folder,current_dataset_name, all_boxes, output_dir, dataset, set_type=set_type)
     return MAP
 
 
-def evaluate_detections(box_list, output_dir, dataset):
-    write_voc_results_file(box_list, dataset)
-    map=do_python_eval(output_dir)
+def evaluate_detections(eval_save_folder,current_dataset_name, box_list, output_dir, dataset, set_type):
+    """
+    先将推断的结果box_list存入det_file为txt格式，这个txt是对每一类单独一个txt
+    然后再进行计算
+    """
+    write_voc_results_file(eval_save_folder,current_dataset_name, box_list, dataset, set_type=set_type)
+    map=do_python_eval(eval_save_folder, current_dataset_name, output_dir, use_07=False, set_type=set_type)
     return map
 
 
 
-def evaluate(model,save_folder,cuda,top_k,im_size = 300, thresh = 0.001,dataset_mean=((104, 117, 123))):
+def evaluate(model, cuda, top_k, dataset_mean, set_type, im_size=300, thresh = 0.001):
+    eval_save_folder="eval/ssd_eval_{}".format(set_type)
+    if not os.path.exists(eval_save_folder):
+        os.mkdir(eval_save_folder)
 
     model.phase='test'
     model.eval()
-    dataset = VOCDetection(args.voc_root,  BaseTransform(im_size, dataset_mean),VOCAnnotationTransform(),phase='valid')
 
+    dataset = VOCDetection(args.voc_root,  BaseTransform(im_size, dataset_mean),VOCAnnotationTransform(),phase=set_type)
+    current_dataset_name=dataset.name
+    print("dataset name = {}".format(current_dataset_name))
+    print("len_dataset={}".format(len(dataset)))
 
-    map=eval_net(save_folder, model, cuda, dataset,
-             BaseTransform(im_size, dataset_mean), top_k, im_size,
+    map=eval_net(eval_save_folder,current_dataset_name, model, cuda, dataset,
+             BaseTransform(im_size, dataset_mean), top_k, im_size, set_type, 
              thresh=thresh)
     return map
 
 if __name__ == '__main__':
+    set_type='test'#####################################
+    # set_type='val'####################################################################################################
+    # test
+    eval_save_folder=os.path.join(SSD_ROOT,"eval_test")
+    if not os.path.exists(eval_save_folder):
+        os.mkdir(eval_save_folder)
+
     # load net
     num_classes = len(labelmap) + 1                      # +1 for background
     image_size = 300
+    net = build_ssd('test', image_size, num_classes) 
 
-    net = build_ssd('test', image_size, num_classes)            # initialize SSD
-    net.load_state_dict(torch.load(args.trained_model))
-    # net.eval()
-    # print('Finished loading model!')
-    # # load data
-    # dataset = VOCDetection(args.voc_root, [('2007', set_type)],
-    #                        BaseTransform(300, dataset_mean),
-    #                        VOCAnnotationTransform(),phase='valid')
-    if args.cuda:
-        net = net.cuda()
-        cudnn.benchmark = True
-    # # evaluation
-    # eval_net(args.save_folder, net, args.cuda, dataset,
-    #          BaseTransform(net.size, dataset_mean), args.top_k, 300,
-    #          thresh=args.confidence_threshold)
-    evaluate(net,args.save_folder,args.cuda, args.top_k, image_size,thresh=args.confidence_threshold)
+    test_weights_folder="/home/ecust/txx/project/ssd_txx/checkpoints/SSD/SSD_train_composite18.1"#########################
+    print("test_weights_folder={}".format(test_weights_folder))
+    weight_list=os.listdir(test_weights_folder)
+    weight_list.sort(key=lambda x:int(x[x.index("_")+1:x.index(".pth")]))
+    for weight in weight_list:
+        if weight.endswith(".pth"):
+            weight_num=int(weight[weight.index("_")+1:weight.index(".pth")])
+            if weight_num>=0:
+            # if weight_num >= 0 and weight_num in [4,6,7,9,14,15,17,18,19]:
+                print("*"*100)
+                print("current_weight={}".format(weight))
+                test_weight_path=os.path.join(test_weights_folder,weight)
+                  # initialize SSD
+                net.load_state_dict(torch.load(test_weight_path))
+                # net.eval()
+                # print('Finished loading model!')
+                # # load data
+                # dataset = VOCDetection(args.voc_root, [('2007', set_type)],
+                #                        BaseTransform(300, dataset_mean),
+                #                        VOCAnnotationTransform(),phase='valid')
+                if args.cuda:
+                    net = net.cuda()
+                    cudnn.benchmark = True
+                # # evaluation
+                # eval_net(args.save_folder, net, args.cuda, dataset,
+                #          BaseTransform(net.size, dataset_mean), args.top_k, 300,
+                #          thresh=args.confidence_threshold)
+                map=evaluate(net, args.cuda, args.top_k, dataset_mean=((104, 117, 123)), set_type = set_type, im_size=image_size, thresh=args.confidence_threshold)
+                
+                # print("map={:.4f}".format(map))

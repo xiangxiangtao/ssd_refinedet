@@ -150,10 +150,10 @@ def refine_match(threshold, truths, priors, variances, labels, loc_t, conf_t, id
         best_truth_idx[best_prior_idx[j]] = j
     matches = truths[best_truth_idx]          # Shape: [num_priors,4]
     if arm_loc is None:
-        conf = labels[best_truth_idx]         # Shape: [num_priors]
+        conf = labels[best_truth_idx]       # Shape: [num_priors]
         loc = encode(matches, priors, variances)
     else:
-        conf = labels[best_truth_idx] + 1     # Shape: [num_priors]
+        conf = labels[best_truth_idx]     # Shape: [num_priors]
         loc = encode(matches, center_size(decode_arm), variances)
     conf[best_truth_overlap < threshold] = 0  # label as background
     loc_t[idx] = loc    # [num_priors,4] encoded offsets to learn

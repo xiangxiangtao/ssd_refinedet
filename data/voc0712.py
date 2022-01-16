@@ -18,13 +18,43 @@ if sys.version_info[0] == 2:
     import xml.etree.cElementTree as ET
 else:
     import xml.etree.ElementTree as ET
+import os
 
-VOC_CLASSES = (  # always index 0
-      'crazing',   'inclusion',  'patches',
-      'pitted_surface',  'rolled-in_scale',  'scratches')
 
 # note: if you used our download scripts, this should be right
-VOC_ROOT = osp.join(HOME, "data/NEU-DET/")
+VOC_ROOT_composite = r"/home/ecust/txx/dataset/gas/IR/composite/composite_gas_gmy_500_400"
+VOC_ROOT_composite_1 = r"/home/ecust/txx/dataset/gas/IR/composite/composite_gas_1_gmy_500_400"
+VOC_ROOT_composite_2 = r"/home/ecust/txx/dataset/gas/IR/composite/composite_gas_2_gmy_500_400"
+VOC_ROOT_composite_17_5 = r"/home/ecust/txx/project/ssd_txx/data/dataset/composite/composite_17.5_gmy"
+VOC_ROOT_composite_18_1 = r"/home/ecust/txx/project/ssd_txx/data/dataset/composite/composite_18.1_gmy"
+
+
+
+VOC_ROOT_real_annotated_gmy = r"/home/ecust/txx/dataset/gas/IR/real/real_annotated_gmy"
+VOC_ROOT_real_annotated = r"/home/ecust/txx/dataset/gas/IR/real/real_annotated"
+VOC_ROOT_real_annotated_1 = r"/home/ecust/txx/dataset/gas/IR/real/real_annotated_1"
+VOC_ROOT_real_7 = r"/home/ecust/txx/project/ssd_txx/data/dataset/real/real_7_gmy"
+
+dataset_list_1=[VOC_ROOT_composite, VOC_ROOT_composite_1,VOC_ROOT_composite_2,VOC_ROOT_composite_17_5,VOC_ROOT_composite_18_1]
+dataset_list_2=[VOC_ROOT_real_annotated_gmy, VOC_ROOT_real_annotated, VOC_ROOT_real_annotated_1, VOC_ROOT_real_7]
+
+
+# VOC_ROOT=VOC_ROOT_composite_18_1####################################################composite
+VOC_ROOT=VOC_ROOT_real_7####################################################real
+print("VOC_ROOT={}".format(VOC_ROOT))
+
+
+# VOC_CLASSES = (  # always index 0
+#       'crazing',   'inclusion',  'patches',
+#       'pitted_surface',  'rolled-in_scale',  'scratches')
+if VOC_ROOT in dataset_list_1:
+    VOC_CLASSES = ('gas',)
+    img_ext="jpg"
+elif VOC_ROOT in dataset_list_2:
+    VOC_CLASSES = ('smoke',)
+    img_ext="png"
+else:
+    print("dataset error!!!")
 
 
 class VOCAnnotationTransform(object):
@@ -43,6 +73,8 @@ class VOCAnnotationTransform(object):
     def __init__(self, class_to_ind=None, keep_difficult=True):
         self.class_to_ind = class_to_ind or dict(
             zip(VOC_CLASSES, range(len(VOC_CLASSES))))
+        # print(len(VOC_CLASSES))
+        # print(self.class_to_ind)
         self.keep_difficult = keep_difficult
 
     def __call__(self, target, width, height):
@@ -60,7 +92,6 @@ class VOCAnnotationTransform(object):
                 continue
             name = obj.find('name').text.lower().strip()
             bbox = obj.find('bndbox')
-
             pts = ['xmin', 'ymin', 'xmax', 'ymax']
             bndbox = []
             for i, pt in enumerate(pts):
@@ -69,6 +100,8 @@ class VOCAnnotationTransform(object):
                 cur_pt = cur_pt / width if i % 2 == 0 else cur_pt / height
                 bndbox.append(cur_pt)
             label_idx = self.class_to_ind[name]
+            # print("*"*50)
+            # print(label_idx)
             bndbox.append(label_idx)
             res += [bndbox]  # [xmin, ymin, xmax, ymax, label_ind]
             # img_id = target.find('filename').text[:-4]
@@ -100,17 +133,24 @@ class VOCDetection(data.Dataset):
         # self.image_set = image_sets
         self.transform = transform
         self.target_transform = target_transform
-        self.name = dataset_name
+        
+        # self.name = dataset_name
+        self.name = self.root.split('/')[-1]
+
         # self._annopath = osp.join('%s', 'Annotations', '%s.xml')
         # self._imgpath = osp.join('%s', 'JPEGImages', '%s.jpg')
         self.phase=phase
+
+        # label_path
         paths = osp.join(self.root, self.phase, 'label')
         # print(annopath)
         # imgpath = osp.join('%s', 'JPEGImages', '%s.jpg')
         self._annopath = sorted(glob.glob("%s/*.*" % paths))
-        self._imgpath = [path.replace("label", "image").replace(".xml", ".jpg") for path in self._annopath]
+        self._imgpath = [path.replace("label", "image").replace(".xml", ".{}".format(img_ext)) for path in self._annopath]
         self.ids = list()
-        rootpath = osp.join(self.root, 'valid', 'image')
+
+        # image_path
+        rootpath = osp.join(self.root, self.phase, 'image')
         a = sorted(glob.glob("%s/*.*" % rootpath))
         imagenames = [path.split('/')[-1].split('.')[0].strip() for path in a]
         for line in imagenames:
@@ -120,6 +160,8 @@ class VOCDetection(data.Dataset):
         #     rootpath = osp.join(self.root, 'VOC' + year)
         #     for line in open(osp.join(rootpath, 'ImageSets', 'Main', name + '.txt')):
         #         self.ids.append((rootpath, line.strip()))
+
+
 
     def __getitem__(self, index):
         im, gt, h, w = self.pull_item(index)
@@ -134,6 +176,7 @@ class VOCDetection(data.Dataset):
 
         target = ET.parse(self._annopath[index]).getroot()
         img = cv2.imread(self._imgpath[index])
+
         # print(self._annopath[index])
         if len(img.shape) == 2:
             # np.expand_dims: 用于扩展数组的形状
@@ -142,9 +185,10 @@ class VOCDetection(data.Dataset):
             img = np.concatenate([img, img, img], axis=-1)
 
         height, width, channels = img.shape
-
+        # print(height, width, channels)
         if self.target_transform is not None:
             target = self.target_transform(target, width, height)
+
 
         if self.transform is not None:
             target = np.array(target)
@@ -168,7 +212,11 @@ class VOCDetection(data.Dataset):
             PIL img
         '''
         img_id = self.ids[index]
+        print('*',img_id)
+        print('*',self._imgpath)
+        # return cv2.imread(self._imgpath % img_id, cv2.IMREAD_COLOR)
         return cv2.imread(self._imgpath % img_id, cv2.IMREAD_COLOR)
+
 
     def pull_anno(self, index):
         '''Returns the original annotation of image at index

@@ -11,10 +11,13 @@ from data import VOC_ROOT, VOC_CLASSES as labelmap
 from PIL import Image
 from data import VOCAnnotationTransform, VOCDetection, BaseTransform, VOC_CLASSES
 import torch.utils.data as data
-from ssd import build_ssd
+# from ssd import build_ssd
+from models.ssd import build_ssd
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='weights/ssd_300_VOC0712.pth',
+# parser.add_argument('--trained_model', default='weights/ssd_300_VOC0712.pth',
+#                     type=str, help='Trained state_dict file path to open')
+parser.add_argument('--trained_model', default='weights/ssd300_7.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--save_folder', default='eval/', type=str,
                     help='Dir to save results')

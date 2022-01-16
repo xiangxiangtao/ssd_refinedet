@@ -1,5 +1,6 @@
 from data import *
 from utils.augmentations import SSDAugmentation
+from utils.logger import *
 from layers.modules import RefineDetMultiBoxLoss
 #from ssd import build_ssd
 from models.refinedet import build_refinedet
@@ -16,6 +17,9 @@ import torch.utils.data as data
 import numpy as np
 import argparse
 # from utils.logging import Logger
+import glob
+import warnings
+warnings.filterwarnings("ignore")
 
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
@@ -24,7 +28,7 @@ def str2bool(v):
 parser = argparse.ArgumentParser(
     description='Single Shot MultiBox Detector Training With Pytorch')
 train_set = parser.add_mutually_exclusive_group()
-parser.add_argument("--epochs", type=int, default=1000, help="number of epochs")
+parser.add_argument("--epochs", type=int, default=20, help="number of epochs")
 parser.add_argument('--dataset', default='VOC', choices=['VOC', 'COCO'], type=str, help='VOC or COCO')
 parser.add_argument('--input_size', default='320', choices=['320', '512'], type=str, help='RefineDet320 or RefineDet512')
 parser.add_argument('--dataset_root', default=VOC_ROOT,help='Dataset root directory path')
@@ -39,9 +43,9 @@ parser.add_argument('--momentum', default=0.9, type=float,help='Momentum value f
 parser.add_argument('--weight_decay', default=5e-4, type=float,help='Weight decay for SGD')
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--visdom', default=False, type=str2bool,help='Use visdom for loss visualization')
-parser.add_argument('--save_folder', default='checkpoints/',help='Directory for saving checkpoint models')
-parser.add_argument("--evaluation_interval", type=int, default=10, help="interval evaluations on validation set")
-parser.add_argument('--save_folders', default='eval/', type=str,help='File path to save results')
+parser.add_argument('--save_folder', default='checkpoints/refinedet/weight_refinedet_',help='Directory for saving checkpoint models')
+parser.add_argument("--evaluation_interval", type=int, default=1, help="interval evaluations on validation set")
+parser.add_argument('--save_folders', default='eval/refinedet_eval', type=str,help='File path to save results')
 args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -61,6 +65,8 @@ if not os.path.exists(args.save_folder):
 
 # sys.stdout = Logger(os.path.join(args.save_folder, 'log.txt'))
 
+eval_set_type = "test"################################################
+
 def train():
     best_map = 0
 
@@ -68,7 +74,8 @@ def train():
         if args.dataset_root == COCO_ROOT:
             parser.error('Must specify dataset if specifying dataset_root')
         cfg = voc_refinedet[args.input_size]
-        dataset = VOCDetection(root=args.dataset_root,transform=SSDAugmentation(cfg['min_dim'], MEANS))
+        train_set_type = "trainval"#################################################################################################
+        dataset = VOCDetection(root=args.dataset_root,transform=SSDAugmentation(cfg['min_dim'], MEANS),phase=train_set_type)
 
 
 
@@ -122,7 +129,7 @@ def train():
     odm_conf_loss = 0
     epoch = 0
     print('Loading the dataset...')
-
+    print("len_dataset={}".format(len(dataset)))
     epoch_size = len(dataset) // args.batch_size
     print('Training RefineDet on:', dataset.name)
     print('Using the specified args:')
@@ -137,10 +144,20 @@ def train():
     # create batch iterator
     iteration = 0
 
+    logger = Logger("logs/refinedet/log_refinedet_")
+
     for epoch in range(args.epochs):
+        print("-"*100)
+        print("epoch:{} / {}".format(epoch+1,args.epochs))
 
         net.phase = 'train'
         net.train()
+
+        sum_loss = 0
+        sum_arm_loss_l = 0
+        sum_arm_loss_c = 0
+        sum_odm_loss_l = 0
+        sum_odm_loss_c = 0
 
         for batch_i, (images, targets) in enumerate(data_loader):
 
@@ -172,24 +189,50 @@ def train():
             odm_loc_loss += odm_loss_l.item()
             odm_conf_loss += odm_loss_c.item()
 
-            if iteration % 10 == 0:
-                print('timer: %.4f sec.' % (t1 - t0))
-                print('epoch '+repr(epoch+1)+': iter ' + repr(iteration) + ' || ARM_L Loss: %.4f ARM_C Loss: %.4f ODM_L Loss: %.4f ODM_C Loss: %.4f ||' \
-                % (arm_loss_l.item(), arm_loss_c.item(), odm_loss_l.item(), odm_loss_c.item()), end=' ')
+            sum_loss+=loss.item()
+            sum_arm_loss_l+=arm_loss_l.item()
+            sum_arm_loss_c+=arm_loss_c.item()
+            sum_odm_loss_l+=odm_loss_l.item()
+            sum_odm_loss_c+=odm_loss_c.item()
+
+            # if iteration % 10 == 0:
+            #     # print('timer: %.4f sec.' % (t1 - t0))
+            #     print('epoch '+repr(epoch+1)+': iter ' + repr(iteration) + ' || ARM_L Loss: %.4f ARM_C Loss: %.4f ODM_L Loss: %.4f ODM_C Loss: %.4f ||' \
+            #     % (arm_loss_l.item(), arm_loss_c.item(), odm_loss_l.item(), odm_loss_c.item()), end=' ')
 
 
         if epoch % args.evaluation_interval == 0:
             print("\n---- Evaluating Model ----")
-            map=evaluate(model=net,
+            map=evaluate(set_type=eval_set_type,
+                        model=net,
                          save_folder=args.save_folders,
                          cuda=args.cuda,
                          top_k=5,
                          im_size=320,
-                         thresh=0.05,
+                         thresh=0.01,
                          dataset_mean=((104, 117, 123)))
 
-            if map >best_map:#取最好的map保存
-                torch.save(net.state_dict(), f"checkpoints/RefineDet320_%d.pth" % (epoch+1))
+            # logs
+            sum_loss/=len(data_loader)
+            sum_arm_loss_l/=len(data_loader)
+            sum_arm_loss_c/=len(data_loader)
+            sum_odm_loss_l/=len(data_loader)
+            sum_odm_loss_c/=len(data_loader)
+
+            logs_metrics = [
+                ("loss", sum_loss),
+                ("arm_loss_l", sum_arm_loss_l),
+                ("arm_loss_c", sum_arm_loss_c),
+                ("odm_loss_l", sum_odm_loss_l),
+                ("odm_loss_c", sum_odm_loss_c),
+                ("test_mAP", map),
+            ]
+            logger.list_of_scalars_summary(logs_metrics, epoch)
+
+            if True:
+            # if map >best_map:#取最好的map保存
+                weight_path = os.path.join(args.save_folder,"RefineDet320_%d.pth" % (epoch+1))
+                torch.save(net.state_dict(), weight_path)
                 best_map = map
 
 

@@ -29,7 +29,7 @@ class SSD(nn.Module):
         super(SSD, self).__init__()
         self.phase = phase
         self.num_classes = num_classes
-        self.cfg = (coco, voc)[num_classes == 7]
+        self.cfg = (coco, voc)[num_classes == 2]
         self.priorbox = PriorBox(self.cfg)
         # self.priors = Variable(self.priorbox.forward(), volatile=True)
         self.priors = self.priorbox.forward()
@@ -198,7 +198,7 @@ mbox = {
 }
 
 
-def build_ssd(phase, size=300, num_classes=7):
+def build_ssd(phase, size=300, num_classes=2):
     if phase != "test" and phase != "train":
         print("ERROR: Phase: " + phase + " not recognized")
         return
@@ -213,7 +213,7 @@ def build_ssd(phase, size=300, num_classes=7):
 
 if __name__ == '__main__':
 
-    ssd_net = build_ssd('train', 300, 7)
+    ssd_net = build_ssd('train', 300, 2)
     out1,out2,out3, = ssd_net(torch.randn(2, 3, 300, 300))
     print(out1.size())
     print(out2.size())

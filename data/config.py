@@ -4,7 +4,7 @@ import os.path
 # gets home dir cross platform
 
 # HOME = os.path.expanduser("~")
-HOME = '/home/ecust/gmy/ssd.pytorch-master/ssd.pytorch-master'
+HOME = '/home/ecust/txx/project/ssd_txx'##############
 
 # for making bounding boxes pretty
 COLORS = ((255, 0, 0, 128), (0, 255, 0, 128), (0, 0, 255, 128),
@@ -14,7 +14,7 @@ MEANS = (104, 117, 123)
 
 # SSD300 CONFIGS
 voc = {
-    'num_classes': 7,
+    'num_classes': 2,
     'lr_steps': (80000, 100000, 120000),
     'max_iter': 120000,
     'feature_maps': [38, 19, 10, 5, 3, 1],
@@ -45,7 +45,7 @@ coco = {
 # RefineDet CONFIGS
 voc_refinedet = {
     '320': {
-        'num_classes': 7,
+        'num_classes': 2,
         'lr_steps': (80000, 100000, 120000),
         'max_iter': 120000,
         'feature_maps': [40, 20, 10, 5],
@@ -59,7 +59,7 @@ voc_refinedet = {
         'name': 'RefineDet_VOC_320',
     },
     '512': {
-        'num_classes': 7,
+        'num_classes': 2,
         'lr_steps': (80000, 100000, 120000),
         'max_iter': 120000,
         'feature_maps': [64, 32, 16, 8],
