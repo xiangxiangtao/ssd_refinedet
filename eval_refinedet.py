@@ -396,7 +396,8 @@ def eval_net(set_type,eval_save_folder, net, cuda, dataset, transform, top_k,
             x = x.cuda()
         _t['im_detect'].tic()
         detections = net(x).data
-        detect_time = _t['im_detect'].toc(average=False)
+        # detect_time = _t['im_detect'].toc(average=False)
+        detect_time = _t['im_detect'].toc(average=True)
 
         # skip j = 0, because it's the background class
         for j in range(1, detections.size(1)):
@@ -416,8 +417,8 @@ def eval_net(set_type,eval_save_folder, net, cuda, dataset, transform, top_k,
                                                                  copy=False)
             all_boxes[j][i] = cls_dets
 
-        # print('im_detect: {:d}/{:d} {:.3f}s'.format(i + 1,
-        #                                             num_images, detect_time))
+        print('im_detect: {:d}/{:d} {:.3f}s'.format(i + 1,
+                                                    num_images, detect_time))
 
     with open(det_file, 'wb') as f:
         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)

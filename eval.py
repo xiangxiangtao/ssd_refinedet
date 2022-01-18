@@ -394,7 +394,8 @@ def eval_net(eval_save_folder,current_dataset_name, net, cuda, dataset, transfor
             x = x.cuda()
         _t['im_detect'].tic()
         detections = net(x).data
-        detect_time = _t['im_detect'].toc(average=False)
+        # detect_time = _t['im_detect'].toc(average=False)
+        detect_time = _t['im_detect'].toc(average=True)
 
         # skip j = 0, because it's the background class
         for j in range(1, detections.size(1)):
@@ -411,8 +412,8 @@ def eval_net(eval_save_folder,current_dataset_name, net, cuda, dataset, transfor
             scores = dets[:, 0].cpu().numpy()
             cls_dets = np.hstack((boxes.cpu().numpy(), scores[:, np.newaxis])).astype(np.float32, copy=False)
             all_boxes[j][i] = cls_dets
-        # if i%100 == 0:
-        #   print('current_im_detect: {:d}/{:d} {:.3f}s'.format(i + 1, num_images, detect_time))
+
+        print('current_im_detect: {:d}/{:d} {:.3f}s'.format(i + 1, num_images, detect_time))
     with open(det_file, 'wb') as f:
         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
     print('\n---------Evaluating detections----------\n')
@@ -450,8 +451,8 @@ def evaluate(model, cuda, top_k, dataset_mean, set_type, im_size=300, thresh = 0
     return map
 
 if __name__ == '__main__':
-    set_type='test'#####################################
-    # set_type='val'####################################################################################################
+    # set_type='test'#####################################
+    set_type='val'####################################################################################################
     # test
     eval_save_folder=os.path.join(SSD_ROOT,"eval_test")
     if not os.path.exists(eval_save_folder):
@@ -462,7 +463,7 @@ if __name__ == '__main__':
     image_size = 300
     net = build_ssd('test', image_size, num_classes) 
 
-    test_weights_folder="/home/ecust/txx/project/ssd_txx/checkpoints/SSD/SSD_train_composite18.1"#########################
+    test_weights_folder="/home/ecust/txx/project/ssd_txx/checkpoints/ssd/weight_ssd_composite18.1"#########################
     print("test_weights_folder={}".format(test_weights_folder))
     weight_list=os.listdir(test_weights_folder)
     weight_list.sort(key=lambda x:int(x[x.index("_")+1:x.index(".pth")]))

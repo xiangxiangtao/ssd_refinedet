@@ -26,6 +26,30 @@ import matplotlib.patches as patches
 from matplotlib.ticker import NullLocator
 from data import VOCDetection, VOC_ROOT, VOCAnnotationTransform, BaseTransform
 from data import VOC_CLASSES as labels
+import warnings
+warnings.filterwarnings("ignore")
+
+
+threshold=0.4########################################
+dataset_name=os.path.basename(VOC_ROOT)
+print("dataset_name=",dataset_name)
+dataset_split="test"
+if dataset_name in ['real_annotated_gmy','real_7_gmy']:
+    dataset_split='val'
+print("dataset_split=",dataset_split)
+weight_path="weights/refinedet_composite18.1_epoch2.pth"############################
+weight_name=os.path.basename(weight_path)
+train_dataset_name=weight_name[weight_name.index("refinedet_")+10:weight_name.index("_epoch")]
+print("weight_path=",weight_path)
+detection_folder=os.path.join("detection","refinedet","det_refinedet_{}_{}_threshold{}_trainOn{}".format(dataset_name,dataset_split,threshold,train_dataset_name))######
+os.makedirs(detection_folder, exist_ok=True)
+
+
+
+
+
+
+
 
 class ImageFolder(Dataset):
     def __init__(self, folder_path, img_size=320):
@@ -54,9 +78,9 @@ class ImageFolder(Dataset):
         return len(self.files)
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='weights/RefineDet320_62.pth',type=str, help='Trained state_dict file path to open')
-parser.add_argument('--save_folder', default='output/', type=str,help='Dir to save results')
-parser.add_argument('--dataset_root', default='data/IR/valid/image', help='Dataset root directory path')
+parser.add_argument('--trained_model', default=weight_path,type=str, help='Trained state_dict file path to open')
+# parser.add_argument('--save_folder', default='output/', type=str,help='Dir to save results')
+parser.add_argument('--dataset_root', default=os.path.join(VOC_ROOT,dataset_split,"image"), help='Dataset root directory path')
 parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
 parser.add_argument("--n_cpu", type=int, default=0, help="number of cpu threads to use during batch generation")
 parser.add_argument("--img_size", type=int, default=320, help="size of each image dimension")
@@ -119,7 +143,8 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
     scale = torch.Tensor(img.shape[1::-1]).repeat(2)
     for i in range(detections.size(1)):
         j = 0
-        while detections[0, i, j, 0] >= 0.55:
+        # while detections[0, i, j, 0] >= 0.55:
+        while detections[0, i, j, 0] >= threshold:
             score = detections[0, i, j, 0]
             # print(i)
             label_name = labels[i - 1]
@@ -139,11 +164,12 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
             # Add the bbox to the plot
             ax.add_patch(bbox)
             # Add label
+            label_name="gas"
             plt.text(
                 pt[0],
                 pt[1],
-                s=label_name,
-                color="white",
+                s=label_name+" {:.2f}".format(score),
+                color="red",
                 verticalalignment="top",
                 bbox={"color": color, "pad": 0},
             )
@@ -153,7 +179,7 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
     plt.gca().xaxis.set_major_locator(NullLocator())
     plt.gca().yaxis.set_major_locator(NullLocator())
     filename = img_paths[0].split("/")[-1].split(".")[0]
-    plt.savefig(f"refinedet_output/{filename}.jpg", bbox_inches="tight",pad_inches=0.0)
+    plt.savefig(f"{detection_folder}/{filename}.png", bbox_inches="tight",pad_inches=0.0)
     plt.close()
 print("FPS: %s" % (1/(TIME/5)))
 

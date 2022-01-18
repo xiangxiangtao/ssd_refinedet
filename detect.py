@@ -30,19 +30,19 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-threshold=0.41########################################
+threshold=0.1########################################
 dataset_name=os.path.basename(VOC_ROOT)
 print("dataset_name=",dataset_name)
 dataset_split="test"
-if dataset_name in ['real_annotated_gmy']:
+if dataset_name in ['real_annotated_gmy','real_7_gmy']:
     dataset_split='val'
 print("dataset_split=",dataset_split)
 # weight_path="weights/ssd_gas_composite_2_epoch18.pth"############################
-weight_path="weights/ssd_real_annotated_1_epoch36.pth"############################
+weight_path="weights/ssd_composite18.1_epoch7.pth"############################
 weight_name=os.path.basename(weight_path)
 train_dataset_name=weight_name[weight_name.index("ssd_")+4:weight_name.index(".pth")]
 print("weight_path=",weight_path)
-detection_folder=os.path.join("detection_ssd","{}".format(dataset_name),"{}".format(dataset_split),"train_on_{}".format(train_dataset_name),"threshold{}".format(threshold))
+detection_folder=os.path.join("detection","ssd","det_ssd_{}_{}_threshold{}_trainOn{}".format(dataset_name,dataset_split,threshold,train_dataset_name))######
 os.makedirs(detection_folder, exist_ok=True)
 # save_folder=os.path.join("detection_output","{}".format(dataset_name),"{}".format(dataset_split))
 # os.makedirs(save_folder, exist_ok=True)
@@ -182,6 +182,7 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
             # Add the bbox to the plot
             ax.add_patch(bbox)
             # Add label
+            label_name="gas"###########################################################################################
             plt.text(
                 pt[0],
                 pt[1],
