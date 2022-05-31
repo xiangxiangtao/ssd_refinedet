@@ -20,6 +20,7 @@ else:
     import xml.etree.ElementTree as ET
 import os
 
+print("data/voc0712.py...")
 
 # note: if you used our download scripts, this should be right
 VOC_ROOT_composite = r"/home/ecust/txx/dataset/gas/IR/composite/composite_gas_gmy_500_400"
@@ -47,11 +48,11 @@ print("VOC_ROOT={}".format(VOC_ROOT))
 # VOC_CLASSES = (  # always index 0
 #       'crazing',   'inclusion',  'patches',
 #       'pitted_surface',  'rolled-in_scale',  'scratches')
+VOC_CLASSES = ('gas',)
+
 if VOC_ROOT in dataset_list_1:
-    VOC_CLASSES = ('gas',)
     img_ext="jpg"
 elif VOC_ROOT in dataset_list_2:
-    VOC_CLASSES = ('smoke',)
     img_ext="png"
 else:
     print("dataset error!!!")

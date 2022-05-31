@@ -36,13 +36,15 @@ def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
 
+
+
 SSD_ROOT=r"/home/ecust/txx/project/ssd_txx"
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Evaluation')
 # parser.add_argument('--trained_model', default='weights/ssd300_7.pth', type=str, help='Trained state_dict file path to open')
 # parser.add_argument('--trained_model', default='checkpoints/ssd300_15.pth', type=str, help='Trained state_dict file path to open')
 parser.add_argument('--eval_folder', default=os.path.join(SSD_ROOT,"eval"), type=str, help='File path to save results')
-parser.add_argument('--confidence_threshold', default=0.001, type=float,help='Detection confidence threshold')
+parser.add_argument('--confidence_threshold', default=0.01, type=float,help='Detection confidence threshold')
 parser.add_argument('--top_k', default=5, type=int,help='Further restrict the number of predictions to parse')
 parser.add_argument('--cuda', default=True, type=str2bool,help='Use cuda to train model')
 parser.add_argument('--voc_root', default=VOC_ROOT, help='Location of VOC root directory')
@@ -370,7 +372,7 @@ def voc_eval(set_type, detpath, annopath, imagesetfile, classname, cachedir, ovt
     return rec, prec, ap
 
 
-def eval_net(eval_save_folder,current_dataset_name, net, cuda, dataset, transform, top_k, im_size, set_type, thresh=0.05):
+def eval_net(eval_save_folder,current_dataset_name, net, cuda, dataset, transform, top_k, im_size, set_type, thresh=0.01):
     """对测试img进行推断并保存测试后的结果
     首先是先将测试数据集送入net进行推断出来detections，存入det_file为pickle文件，
     这是为了再次评测的时候，如果网络没变的话就直接从pickle中取出上次推断的结果进行评测就好了。
@@ -397,10 +399,23 @@ def eval_net(eval_save_folder,current_dataset_name, net, cuda, dataset, transfor
         # detect_time = _t['im_detect'].toc(average=False)
         detect_time = _t['im_detect'].toc(average=True)
 
+        # # get conf>thresh
+        # print(detections[:,:,4].shape)
+        # print(detections.shape)
+        # detections = detections[detections[:,4]>=thresh,:]
+        # print(detections.shape)
+
+        # for 1_d in range(detections.size(0)):
+        #     for 2_d in range(detections.size(1)):
+        #         for 3_d in range(range(detections.size(2))):
+        #             for 4_d in range(detections.size(3)):
+        #                 print(range(detections[1_d][2_d][3_d][4_d])
+
         # skip j = 0, because it's the background class
-        for j in range(1, detections.size(1)):
+        for j in range(1, detections.size(1)):#class
             dets = detections[0, j, :]
-            mask = dets[:, 0].gt(0.).expand(5, dets.size(0)).t()
+            # mask = dets[:, 0].gt(0.).expand(5, dets.size(0)).t()
+            mask = dets[:, 0].gt(thresh).expand(5, dets.size(0)).t()#get rid of conf>thresh part
             dets = torch.masked_select(dets, mask).view(-1, 5)
             if dets.size(0) == 0:
                 continue
@@ -451,6 +466,11 @@ def evaluate(model, cuda, top_k, dataset_mean, set_type, im_size=300, thresh = 0
     return map
 
 if __name__ == '__main__':
+    conf_thresh = 0.01
+    # conf_thresh = 0.4
+    print("conf_thresh={}".format(conf_thresh))
+
+
     # set_type='test'#####################################
     set_type='val'####################################################################################################
     # test
@@ -490,6 +510,6 @@ if __name__ == '__main__':
                 # eval_net(args.save_folder, net, args.cuda, dataset,
                 #          BaseTransform(net.size, dataset_mean), args.top_k, 300,
                 #          thresh=args.confidence_threshold)
-                map=evaluate(net, args.cuda, args.top_k, dataset_mean=((104, 117, 123)), set_type = set_type, im_size=image_size, thresh=args.confidence_threshold)
+                map=evaluate(net, args.cuda, args.top_k, dataset_mean=((104, 117, 123)), set_type = set_type, im_size=image_size, thresh=conf_thresh)
                 
                 # print("map={:.4f}".format(map))

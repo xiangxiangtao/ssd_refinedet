@@ -25,7 +25,7 @@ def str2bool(v):
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Training With Pytorch')
 train_set = parser.add_mutually_exclusive_group()
-parser.add_argument("--epochs", type=int, default=20, help="number of epochs")######################################
+parser.add_argument("--epochs", type=int, default=10, help="number of epochs")######################################
 parser.add_argument('--dataset', default='VOC', choices=['VOC', 'COCO'],type=str, help='VOC or COCO')
 parser.add_argument('--dataset_root', default=VOC_ROOT, help='Dataset root directory path')###################
 parser.add_argument('--basenet', default='weights/vgg16_reducedfc.pth', help='Pretrained base model')
@@ -105,11 +105,11 @@ def train():
     conf_loss = 0
     print('Loading the dataset...')
 
-    epoch_size = len(dataset) // args.batch_size
+    dataset_size = len(dataset) // args.batch_size
     print('Training SSD on:', dataset.name)
     print('Using the specified args:')
     print(args)
-    print("epoch_size={}".format(epoch_size))
+    print("dataset_size={}".format(dataset_size))
 
     step_index = 0
 
@@ -176,15 +176,15 @@ def train():
             print("\n---- Evaluating Model ----")
 
             # def evaluate(model, save_folder, cuda, top_k, dataset_mean, set_type, im_size=300, thresh = 0.001):
-            map=evaluate(model=net,
-                         cuda=args.cuda,
-                         top_k=5,
-                          dataset_mean=((104, 117, 123)),
-                          set_type="val",##################################
-                         im_size=300,
-                         thresh=0.001 #0.05
-                         )
-            print("map = {} / {}".format(map,best_map))
+            # map=evaluate(model=net,
+            #              cuda=args.cuda,
+            #              top_k=5,
+            #               dataset_mean=((104, 117, 123)),
+            #               set_type="val",##################################
+            #              im_size=300,
+            #              thresh=0.001 #0.05
+            #              )
+            # print("map = {} / {}".format(map,best_map))
 
             # logs
             sum_loss/=len(data_loader)
@@ -194,7 +194,7 @@ def train():
                 ("loss", sum_loss),
                 ("loss_loc", sum_loss_loc),
                 ("loss_conf", sum_loss_conf),
-                ("val_mAP", map),
+                # ("val_mAP", map),
             ]
             logger.list_of_scalars_summary(logs_metrics, epoch)
 
@@ -206,7 +206,7 @@ def train():
                 save_weights_path=os.path.join(args.save_folder,"ssd300_{}.pth".format(epoch+1))#############
                 # torch.save(net.state_dict(), f"checkpoints/ssd300_%d.pth" % (epoch+1))
                 torch.save(net.state_dict(), save_weights_path)
-                best_map = map
+                # best_map = map
 
 
 

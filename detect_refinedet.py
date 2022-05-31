@@ -30,18 +30,31 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-threshold=0.4########################################
+parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
+parser.add_argument('--weight_path', default=None,type=str, help='Trained state_dict file path to open')
+# parser.add_argument('--save_folder', default='output/', type=str,help='Dir to save results')
+parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
+parser.add_argument("--n_cpu", type=int, default=0, help="number of cpu threads to use during batch generation")
+parser.add_argument("--image_size", type=int, default=320, help="size of each image dimension")
+parser.add_argument("--thresh", type=float, default=0.5, help="thresh to draw predict bbx")
+args = parser.parse_args()
+
+
+
 dataset_name=os.path.basename(VOC_ROOT)
 print("dataset_name=",dataset_name)
 dataset_split="test"
 if dataset_name in ['real_annotated_gmy','real_7_gmy']:
     dataset_split='val'
 print("dataset_split=",dataset_split)
-weight_path="weights/refinedet_composite18.1_epoch2.pth"############################
-weight_name=os.path.basename(weight_path)
+
+image_path = os.path.join(VOC_ROOT,dataset_split,"image")#######################
+print("image_path={}".format(image_path))
+
+weight_name=os.path.basename(args.weight_path)
 train_dataset_name=weight_name[weight_name.index("refinedet_")+10:weight_name.index("_epoch")]
-print("weight_path=",weight_path)
-detection_folder=os.path.join("detection","refinedet","det_refinedet_{}_{}_threshold{}_trainOn{}".format(dataset_name,dataset_split,threshold,train_dataset_name))######
+
+detection_folder=os.path.join("detection","refinedet","det_refinedet_{}_{}_thresh{}_trainOn{}".format(dataset_name,dataset_split,args.thresh,train_dataset_name))######
 os.makedirs(detection_folder, exist_ok=True)
 
 
@@ -77,23 +90,14 @@ class ImageFolder(Dataset):
     def __len__(self):
         return len(self.files)
 
-parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default=weight_path,type=str, help='Trained state_dict file path to open')
-# parser.add_argument('--save_folder', default='output/', type=str,help='Dir to save results')
-parser.add_argument('--dataset_root', default=os.path.join(VOC_ROOT,dataset_split,"image"), help='Dataset root directory path')
-parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
-parser.add_argument("--n_cpu", type=int, default=0, help="number of cpu threads to use during batch generation")
-parser.add_argument("--img_size", type=int, default=320, help="size of each image dimension")
-args = parser.parse_args()
-
 
 os.makedirs("refinedet_output", exist_ok=True)
 net = build_refinedet('test', 320, 2)
-net.load_weights(args.trained_model)
+net.load_weights(args.weight_path)
 net = net.cuda()
 
 dataloader = DataLoader(
-        ImageFolder(args.dataset_root, img_size=args.img_size),
+        ImageFolder(image_path, img_size=args.image_size),
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.n_cpu,
@@ -144,7 +148,7 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
     for i in range(detections.size(1)):
         j = 0
         # while detections[0, i, j, 0] >= 0.55:
-        while detections[0, i, j, 0] >= threshold:
+        while detections[0, i, j, 0] >= args.thresh:
             score = detections[0, i, j, 0]
             # print(i)
             label_name = labels[i - 1]
@@ -168,10 +172,10 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
             plt.text(
                 pt[0],
                 pt[1],
-                s=label_name+" {:.2f}".format(score),
-                color="red",
+                s=label_name+": {:.2f}".format(score),
+                color="yellow",
                 verticalalignment="top",
-                bbox={"color": color, "pad": 0},
+                # bbox={"color": color, "pad": 0},
             )
             j+=1
             # Save generated image with detections

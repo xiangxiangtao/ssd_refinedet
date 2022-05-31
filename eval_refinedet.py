@@ -38,16 +38,16 @@ def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
 
-parser = argparse.ArgumentParser(
-    description='Single Shot MultiBox Detector Evaluation')
-# parser.add_argument('--trained_model', default='weights/RefineDet320_62.pth', type=str, help='Trained state_dict file path to open')
-parser.add_argument('--trained_model', default='checkpoints/refinedet/weight_refinedet_/RefineDet320_1.pth', type=str, help='Trained state_dict file path to open')
+parser = argparse.ArgumentParser(description='Single Shot MultiBox Detector Evaluation')
+parser.add_argument('--weight_path', default=None, type=str, help='Trained state_dict file path to open')#############
+parser.add_argument('--weight_folder', default=None, type=str, help='weight folder to load weight')#############
 parser.add_argument('--save_folder', default='eval/refinedet_eval', type=str, help='File path to save results')
 parser.add_argument('--confidence_threshold', default=0.01, type=float,help='Detection confidence threshold')
 parser.add_argument('--top_k', default=5, type=int,help='Further restrict the number of predictions to parse')
 parser.add_argument('--cuda', default=True, type=str2bool,help='Use cuda to train model')
-parser.add_argument('--voc_root', default=VOC_ROOT, help='Location of VOC root directory')
+parser.add_argument('--voc_root', default=VOC_ROOT, help='Location of VOC root directory')#####################################
 parser.add_argument('--cleanup', default=True, type=str2bool,help='Cleanup and remove results files following eval')
+parser.add_argument('--image_size', default=320, type=int,help='image size when put into net')
 
 args = parser.parse_args()
 
@@ -416,8 +416,8 @@ def eval_net(set_type,eval_save_folder, net, cuda, dataset, transform, top_k,
                                   scores[:, np.newaxis])).astype(np.float32,
                                                                  copy=False)
             all_boxes[j][i] = cls_dets
-
-        print('im_detect: {:d}/{:d} {:.3f}s'.format(i + 1,
+        if args.weight_path:
+            print('im_detect: {:d}/{:d} {:.3f}s'.format(i + 1,
                                                     num_images, detect_time))
 
     with open(det_file, 'wb') as f:
@@ -448,17 +448,18 @@ def evaluate(set_type,model,save_folder,cuda,top_k,im_size = 320, thresh = 0.001
              thresh=thresh)
     return map
 
-def test_one_weight():
-    # set_type="val"#######################
-    set_type = "test"
+def test_one_weight(weight_path):
+    print("weight_path={}".format(weight_path))
+    set_type="val"#######################
+    # set_type = "test"
 
     # load net
     num_classes = len(labelmap) + 1                      # +1 for background
 
-    image_size = 320
+    image_size = args.image_size
     net = build_refinedet('test', image_size, num_classes)
 
-    net.load_state_dict(torch.load(args.trained_model))
+    net.load_state_dict(torch.load(weight_path))
     # net.eval()
     # print('Finished loading model!')
     # # load data
@@ -471,7 +472,8 @@ def test_one_weight():
 
     evaluate(set_type,net,args.save_folder,args.cuda, args.top_k, image_size,thresh=args.confidence_threshold)
 
-def test_weights_in_one_folder():
+def test_weights_in_one_folder(weight_folder):
+    print("weight_folder={}".format(weight_folder))
     set_type="val"#####################################################################################
     # set_type = "test"
     print("current_set_type={}".format(set_type))
@@ -479,12 +481,10 @@ def test_weights_in_one_folder():
     # load net
     num_classes = len(labelmap) + 1                      # +1 for background
 
-    image_size = 320
+    image_size = args.image_size
     net = build_refinedet('test', image_size, num_classes)
 
-    test_weights_folder="checkpoints/refinedet/weight_refinedet_composite18.1"#########################
-    print("test_weights_folder={}".format(test_weights_folder))
-    weight_list=os.listdir(test_weights_folder)
+    weight_list=os.listdir(weight_folder)
     weight_list.sort(key=lambda x:int(x[x.index("_")+1:x.index(".pth")]))
     for weight in weight_list:
         if weight.endswith(".pth"):
@@ -493,7 +493,7 @@ def test_weights_in_one_folder():
             # if weight_num >= 0 and weight_num in [4,6,7,9,14,15,17,18,19]:
                 print("*"*100)
                 print("current_weight={}".format(weight))
-                test_weight_path=os.path.join(test_weights_folder,weight)
+                test_weight_path=os.path.join(weight_folder,weight)
 
                 net.load_state_dict(torch.load(test_weight_path))
 
@@ -505,7 +505,8 @@ def test_weights_in_one_folder():
 
 
 if __name__ == '__main__':
-    # test_one_weight()
-
-    test_weights_in_one_folder()
+    if args.weight_path:
+        test_one_weight(args.weight_path)
+    if args.weight_folder:
+        test_weights_in_one_folder(args.weight_folder)
 

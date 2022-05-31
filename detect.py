@@ -24,29 +24,43 @@ import glob
 from matplotlib import pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.ticker import NullLocator
-from data import VOCDetection, VOC_ROOT, VOCAnnotationTransform, BaseTransform
+from data import VOC_ROOT,VOCDetection, VOCAnnotationTransform, BaseTransform
 from data import VOC_CLASSES as labels
 import os
 import warnings
 warnings.filterwarnings("ignore")
 
-threshold=0.1########################################
-dataset_name=os.path.basename(VOC_ROOT)
+
+
+parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
+parser.add_argument('--weight_path', default="weights/ssd_composite18.1_epoch5.pth",type=str, help='Trained state_dict file path to open')
+# parser.add_argument('--save_folder', default=save_folder, type=str,help='Dir to save results')
+parser.add_argument('--dataset_root', default=VOC_ROOT, help='Dataset root directory path')
+parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
+parser.add_argument("--n_cpu", type=int, default=8, help="number of cpu threads to use during batch generation")
+parser.add_argument("--img_size", type=int, default=300, help="size of each image dimension")
+parser.add_argument("--thresh", type=float, default=0.3, help="thresh when draw predict bbx")
+
+args = parser.parse_args()
+
+
+dataset_name=os.path.basename(args.dataset_root)
 print("dataset_name=",dataset_name)
 dataset_split="test"
 if dataset_name in ['real_annotated_gmy','real_7_gmy']:
     dataset_split='val'
 print("dataset_split=",dataset_split)
-# weight_path="weights/ssd_gas_composite_2_epoch18.pth"############################
-weight_path="weights/ssd_composite18.1_epoch7.pth"############################
-weight_name=os.path.basename(weight_path)
+
+weight_name=os.path.basename(args.weight_path)
 train_dataset_name=weight_name[weight_name.index("ssd_")+4:weight_name.index(".pth")]
-print("weight_path=",weight_path)
-detection_folder=os.path.join("detection","ssd","det_ssd_{}_{}_threshold{}_trainOn{}".format(dataset_name,dataset_split,threshold,train_dataset_name))######
+
+detection_folder=os.path.join("detection","ssd","det_ssd_{}_{}_threshold{}_trainOn{}".format(dataset_name,dataset_split,args.thresh,train_dataset_name))######
 os.makedirs(detection_folder, exist_ok=True)
 # save_folder=os.path.join("detection_output","{}".format(dataset_name),"{}".format(dataset_split))
 # os.makedirs(save_folder, exist_ok=True)
 
+
+detect_image_path = os.path.join(args.dataset_root,dataset_split,"image")
 
 class ImageFolder(Dataset):
     def __init__(self, folder_path, img_size=300):
@@ -74,23 +88,14 @@ class ImageFolder(Dataset):
     def __len__(self):
         return len(self.files)
 
-parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default=weight_path,type=str, help='Trained state_dict file path to open')
-# parser.add_argument('--save_folder', default=save_folder, type=str,help='Dir to save results')
-parser.add_argument('--dataset_root', default=os.path.join(VOC_ROOT,dataset_split,"image"), help='Dataset root directory path')
-parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
-parser.add_argument("--n_cpu", type=int, default=0, help="number of cpu threads to use during batch generation")
-parser.add_argument("--img_size", type=int, default=300, help="size of each image dimension")
-args = parser.parse_args()
-
 
 
 net = build_ssd('test', 300, 2)    # initialize SSD
-net.load_weights(args.trained_model)  #ssd300_701.pth是经过数据增强的
+net.load_weights(args.weight_path)  #ssd300_701.pth是经过数据增强的
 net = net.cuda()
 
 dataloader = DataLoader(
-        ImageFolder(args.dataset_root, img_size=args.img_size),
+        ImageFolder(detect_image_path, img_size=args.img_size),
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.n_cpu,
@@ -142,7 +147,7 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
 
     img1 = Image.open(img_paths[0]).convert('L')
     
-    img1 = img1.resize((300, 300))
+    img1 = img1.resize((args.img_size, args.img_size))
     img1 = np.array(img1)
     # print("img1_shape=",img1.shape)
     # print(img1)
@@ -163,7 +168,7 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
     # print(detections.size(1))
     for i in range(detections.size(1)):
         j = 0
-        while detections[0, i, j, 0] >= threshold:
+        while detections[0, i, j, 0] >= args.thresh:
             score = detections[0, i, j, 0]
             label_name = labels[i - 1]
             # print(score,label_name)
@@ -182,14 +187,13 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
             # Add the bbox to the plot
             ax.add_patch(bbox)
             # Add label
-            label_name="gas"###########################################################################################
             plt.text(
                 pt[0],
                 pt[1],
-                s=label_name+" {:.2f}".format(score),
-                color="red",
+                s=label_name+": {:.2f}".format(score),
+                color="yellow",
                 verticalalignment="top",
-                bbox={"color": color, "pad": 0},
+                # bbox={"color": color, "pad": 0},
             )
             j+=1
             # Save generated image with detections
